@@ -1,0 +1,153 @@
+<?php
+// $Id: $
+/**
+ * @package	metaverse
+ * @copyright	Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
+ * @license		GPL
+ */
+
+/**
+* Implementation of hook_install().
+*/
+function metaverse_install() {
+  // Create tables.
+  drupal_install_schema('metaverse');
+}
+
+/**
+* Implementation of hook_uninstall().
+*/
+function metaverse_uninstall() {
+  // Remove tables.
+  drupal_uninstall_schema('metaverse');
+  // Remove variables.
+  //db_query("DELETE FROM {variable} WHERE name LIKE 'metaverse%%'");
+}
+
+/**
+* Implementation of hook_schema().
+*/
+
+function metaverse_schema() {
+  $schema['metaverse_grids'] = array(
+    'description' => t('Grids out there in the metaverse'),
+    'fields' => array(
+      'grid_id' => array(
+	      'type' => 'serial',
+	      'not null' => TRUE,
+	      'description' => t('grid ID')
+      ),
+      'nid' => array(
+	      'type' => 'int',
+	      'not null' => TRUE,
+	      'default' => 0,
+	      'description' => t('The node that describes us.')
+      ),
+      'vid' => array(
+	      'type' => 'int',
+	      'not null' => TRUE,
+	      'default' => 0,
+	      'description' => t('The node revision that describes us.')
+      ),
+      'grid_restricted' => array(
+	      'type' => 'int',
+	      'not null' => TRUE,
+	      'default' => 0,
+	      'description' => t('restrict access for this grid')
+      ),
+      'grid_name' => array(
+	      'type' => 'varchar',
+	      'length' => 255,
+	      'not null' => TRUE,
+	      'default' => '',
+	      'description' => t('human-readable name')
+      ),
+      'grid_nick' => array(
+	      'type' => 'varchar',
+	      'length' => 4,
+	      'not null' => TRUE,
+	      'default' => '',
+	      'description' => t('human-readable very short nickname (like SL)')
+      ),
+      'shard_name' => array(
+	      'type' => 'varchar',
+	      'length' => 36,
+	      'not null' => TRUE,
+	      'default' => '',
+	      'description' => t('machine-readable grid name from x-secondlife-shard')
+      ),
+      'grid_allowed_ips' => array(
+	      'type' => 'varchar',
+	      'length' => 255,
+	      'not null' => FALSE,
+	      'default' => '',
+	      'description' => t('valid IP addresses for this grid.')
+      )
+    ),
+    'indexes' => array(
+      'shard_name'     => array('shard_name'),
+      'shard_name_ips' => array('shard_name', 'grid_allowed_ips'),
+      ),
+    'unique keys' => array(
+      'grid_id' => array('grid_id'),
+      ),
+    'primary key' => array('grid_id')
+  );
+  $schema['metaverse_regions'] = array(
+    'description' => t('Any simulator'),
+    'fields' => array(
+      'region_id' => array(
+	      'type' => 'serial',
+	      'not null' => TRUE,
+	      'description' => t('simulator ID')
+      ),
+      'grid_id' => array(
+	      'type' => 'int',
+	      'not null' => TRUE,
+	      'description' => t('Grid where this region lives')
+      ),
+      'nid' => array(
+	      'type' => 'int',
+	      'not null' => TRUE,
+	      'default' => 0,
+	      'description' => t('The node that describes us.')
+      ),
+      'vid' => array(
+	      'type' => 'int',
+	      'not null' => TRUE,
+	      'default' => 0,
+	      'description' => t('The node revision that describes us.')
+      ),
+      'region_restricted' => array(
+	      'type' => 'int',
+	      'not null' => TRUE,
+	      'default' => 0,
+	      'description' => t('restrict access for this simulator')
+      ),
+      'region_name' => array(
+	      'type' => 'varchar',
+	      'length' => 255,
+	      'not null' => TRUE,
+	      'default' => '',
+	      'description' => t('human-readable name')
+      ),
+      'region_coords_x' => array(
+	      'type' => 'int',
+	      'not null' => FALSE,
+	      'default' => 0,
+	      'description' => t('grid coords for simulator')
+      ),
+      'region_coords_y' => array(
+	      'type' => 'int',
+	      'not null' => FALSE,
+	      'default' => 0,
+	      'description' => t('grid coords for simulator')
+      ),
+    ),
+    'unique keys' => array(
+      'region_id' => array('region_id'),
+      ),
+    'primary key' => array('region_id')
+  );
+  return $schema;
+}

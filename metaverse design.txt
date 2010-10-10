@@ -1,0 +1,11 @@
+metaverse basically replaces the secondlife module.
+it allows for more grids than just secondlife.
+
+You set up grids, each with a name, a machine-readable name,
+and a comma-separated list of allowed IPs.
+
+Each grid can be switched on or off, allowing or disallowing access from that grid.
+
+llHTTPRequest sends an X-Secondlife-Shard header which gives the grid. ReactionGrid for ReactionGrid, and 'Production' for Second Life (booo.)
+
+

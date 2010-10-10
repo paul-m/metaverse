@@ -1,0 +1,5 @@
+; $Id: $
+name = Metaverse Library
+description = Metaverse library integration
+package = Metaverse
+core = 6.x

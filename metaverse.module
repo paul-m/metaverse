@@ -1,0 +1,529 @@
+<?php
+
+/* implementation of hook_boot()
+ *
+ */
+
+function metaverse_boot() {
+  // we need to:
+  // 1) figure out which grid this comes from
+  // 2) see if the grid is restricted
+  // 3) if not, see if it's a valid IP for that grid
+  
+  // is there a way to add this to the access table?
+  // also: use troll module as guide for re-write
+  // per-grid ip whitelists are grossly undertested.
+
+  // If there's no shard header, then we have nothing more to do.
+  if (!isset($_SERVER['HTTP_X_SECONDLIFE_SHARD'])) return;
+  $grid = s_metaverse_for_shard_name($_SERVER['HTTP_X_SECONDLIFE_SHARD']);
+  if ($grid) {
+    // ok, we know this comes from a metaverse service, since it
+    // has a shard header.
+    // if site is offline for maintenance...
+    if (variable_get('site_offline', 0)) {
+      metaverse_raw_status('HTTP/1.1 404 Not Found (offline)');
+    }
+    // see if this grid is banned....
+    if (isset($grid->grid_restricted) && $grid->grid_restricted) {
+      metaverse_raw_status('HTTP/1.1 404 Not Found (grid restricted)');
+    }
+    // ok, grid isn't banned, but is this a valid IP for this grid?
+    if (isset($grid->grid_allowed_ips) && $grid->grid_allowed_ips != '') {
+      $valid_ip = FALSE;
+      $subnets = explode(",", $grid->grid_allowed_ips);
+      $remote_addr = ip_address();
+      if (variable_get('metaverse_use_proxy', 0)) {
+        $tempa = split(", ", $_SERVER['HTTP_X_FORWARDED_FOR']);
+        $remote_addr = trim($tempa[1]);
+      }
+      foreach($subnets as $network) {
+        if(metaverse_netmatch($network, $remote_addr)) {
+          $valid_ip = TRUE;
+          break;
+        }
+      }
+      if (!$valid_ip) {
+        metaverse_raw_status('HTTP/1.1 404 Not Found (unknown IP for grid)');
+      }
+    }
+  }
+}
+
+function metaverse_raw_status($status_header, $watchdog_message = '', $watchdog_array = NULL, $watchdog_alert = WATCHDOG_INFO) {
+  // send back status outside the normal drupal_set_headers regime.
+  // we do this because it will be called from hook_boot() which
+  // disallows drupal_set_header().
+  // NOTE: THIS FUNCTION CALLS EXIT!!
+  header($status_header);
+  if ($watchdog_message != '')
+    watchdog('metaverse', $watchdog_message, $watchdog_array, $watchdog_alert);
+  exit;
+}
+
+/*
+ * Implementation of hook_enable()
+ *  called when the admin enables the module
+ */
+function metaverse_enable() {
+  // someone enabled this module, so it's time to add some grids to the DB
+  // if none exist yet.
+  // we call a helper function stored in an .inc file to keep this file lean.
+  $grids = db_fetch_array(db_query('SELECT grid_id FROM {metaverse_grids}'));
+  if (!$grids) {
+    module_load_include('inc', 'metaverse', 'metaverse');
+    _metaverse_enable();
+  }
+}
+
+/**
+ * Implementation of hook_help().
+ */
+function metaverse_help($section) {
+  switch ($section) {
+    case 'admin/help#metaverse':
+      return '<p>' . t('Metaverse integration library') . '</p>';
+  }
+}
+/**
+ * Implementation of hook_menu().
+ */
+function metaverse_menu() {
+  $items['admin/settings/metaverse'] = array(
+    'title'              => t('Metaverse'),
+    'description'        => t('Settings for the Metaverse Framework module.'),
+    'page callback'      => 'drupal_get_form',
+    'page arguments'     => array('metaverse_settings'),
+    'access arguments'   => array('administer site configuration'),
+    'type'               => MENU_NORMAL_ITEM,
+    );
+
+  // This is the main callback from in-world.
+  // We call it /inworld so it's clear where the request comes from.
+  $items['inworld'] = array(
+    'page callback'     => 'metaverse_request',
+    'access callback'   => TRUE,
+    'type'              => MENU_LOCAL_TASK
+    );
+
+  return $items;
+}
+
+/**
+ * Settings Administration Panel.
+ */
+function metaverse_settings() {
+  // Form is stored in an include file to save on code weight.
+  module_load_include('inc', 'metaverse', 'metaverse');
+  return _metaverse_settings_form();
+}
+
+/**
+ * This function is called by the menu API when we get an /inworld request.
+ * Dispatch the call to any applicable module.
+ * This can accept either form arguments for app and cmd, or path elements
+ * ie: inworld/app/cmd
+ *
+ * In the future, modules will be responsible for sending their responses
+ * without the aid of this function.
+ */
+function metaverse_request($path_app = '', $path_cmd = '') {
+  // metaverse_boot() took care of bans
+  $mv = metaverse_get_session();
+  $app = $mv->app;
+  $cmd = $mv->cmd;
+  if ($path_app != '') {
+    $app = $path_app;
+    // don't look at cmd if there's no app
+    if ($path_cmd != '') $cmd = $path_cmd;
+  }
+  // now we dispatch using secondlife API.
+  $dispatcher = $app . '_dispatch';
+  if ($app && $cmd && function_exists($dispatcher)) {
+    $args = array();
+    if (isset($mv->arg))
+      // we're still doing this so there's backwards compatibility
+      $args = metaverse_parse_args($mv->arg);
+    module_invoke($app, 'dispatch', $cmd, $mv, $args);
+  }
+  else {
+    $mv->response['status'] = FALSE;
+    $mv->response['message'] = 'app ' . $app . ' does not exist.';
+  }
+  metaverse_send_response($mv);
+}
+
+/**
+ * Get the http variables.
+ */
+function metaverse_get_session() {
+  // eventually, we will move much of this to 
+  // singleton accessors, so we don't waste effort
+  // parsing eg region_name for apps which don't need it.
+  // also: MEMORY HOG and CODE BLOAT.
+  // real OOP might help, too.
+
+  $mv = new stdClass();
+
+  $mv->objectkey   = $_SERVER['HTTP_X_SECONDLIFE_OBJECT_KEY'];
+  $mv->objectname  = $_SERVER['HTTP_X_SECONDLIFE_OBJECT_NAME'];
+  $mv->ownerkey    = $_SERVER['HTTP_X_SECONDLIFE_OWNER_KEY'];
+  $mv->ownername   = $_SERVER['HTTP_X_SECONDLIFE_OWNER_NAME'];
+  $mv->region      = $_SERVER['HTTP_X_SECONDLIFE_REGION'];
+  $mv->position    = $_SERVER['HTTP_X_SECONDLIFE_LOCAL_POSITION'];
+  $mv->app         = $_POST[variable_get('metaverse_app', 'app')];
+  $mv->cmd         = $_POST[variable_get('metaverse_cmd', 'cmd')];
+  $mv->arg         = $_POST[variable_get('metaverse_arg', 'arg')];
+  $mv->output_type = $_POST['output_type'];
+  
+  preg_match_all('/(.*) \((\d+), (\d+)\)/', $mv->region, $temp);
+  $mv->region_name = $temp[1][0];
+  $mv->region_x    = $temp[2][0];
+  $mv->region_y    = $temp[3][0];
+
+  preg_match_all('/\((.*), (.*), (.*)\)/', $mv->position, $temp);
+  $mv->position_x = $temp[1][0];
+  $mv->position_y = $temp[2][0];
+  $mv->position_z = $temp[3][0];
+
+  $mv->grid = $grid;
+  
+  return $mv;
+}
+
+/**
+ * Parse the POST arguments.
+ */
+function metaverse_parse_args($arg) {
+  // this model isn't so great. but we'll play along for now.
+  $args = array();
+  foreach(explode(variable_get('metaverse_args_separator', ':'), $arg) as $pair) {
+    list($key, $value) = explode('=', $pair);
+    $args[$key] = $value;
+  }
+  return $args;
+}
+
+/**
+ * Returns the value to SecondLife.
+ */
+function metaverse_send_response(&$sl) {
+  $debug = variable_get('metaverse_debug', '');
+  $sl->response['app'] = $sl->app;
+  $sl->response['cmd'] = $sl->cmd;
+
+  if ($debug) {
+    foreach($sl->response as $key => $value) {
+      metaverse_debug("RESPONSE: $key = $value");
+    }
+  }
+
+  switch($sl->output_type) {
+    default:
+    case 'full':
+      foreach($sl->response as $key => $value) {
+        print "$key=$value:";
+      }
+      print "\n";
+      break;
+    case 'message':
+      if (isset($sl->response['status_code'])) {
+        drupal_set_header(array('HTTP/1.1 ' . $sl->response['status_code']));
+      }
+      print strip_tags($sl->response['message']);
+      break;
+  }
+}
+
+/**
+ * Check the ip.
+ * Authors: Falados Kapuskas, JoeTheCatboy Freelunch
+ */
+function metaverse_netmatch($network, $ip) {
+  // determines if a network in the form of 192.168.17.1/16 or
+  // 127.0.0.1/255.255.255.255 or 10.0.0.1 matches a given ip
+  $ip_arr = explode('/', $network);
+  $network_long = ip2long($ip_arr[0]);
+
+  $x = ip2long($ip_arr[1]);
+  $mask =  long2ip($x) == $ip_arr[1] ? $x : 0xffffffff << (32 - $ip_arr[1]);
+  $ip_long = ip2long($ip);
+
+  return ($ip_long & $mask) == ($network_long & $mask);
+}
+
+/**
+ * string helper function
+ */
+function metaverse_get_data_between($src, $left, $right) {
+  // function to return the data between two tokens (VERY USEFUL)
+  $ids = stripos($src,$left) + strlen($left);
+  if($ids === false) return false;
+  $ide = stripos($src,$right,$ids);
+  if($ide === false) return false;
+  return(substr($src,$ids,$ide - $ids));
+}
+
+/**
+* Get the linden user profile
+*/
+function metaverse_get_linden_user_profile($user_key) {
+  $fp = fsockopen("world.secondlife.com", 80, $errno, $errstr, 30);
+  if (!$fp) {
+    $result = "$errstr ($errno)<br />\n";
+  }
+  else {
+    $out = "GET /resident/".$user_key." HTTP/1.1\r\n";
+    $out .= "Host: world.secondlife.com\r\n";
+    $out .= "Connection: Close\r\n\r\n";
+    fwrite($fp, $out);
+    $result = '';
+    while (!feof($fp)) {
+      $result .= fgets($fp, 128);
+    }
+    fclose($fp);
+  }
+  return $result;
+}
+/**
+* Extracts the profile picture key from the linden user profile
+*/
+function metaverse_extract_picture_key($profile_page) {
+  return metaverse_get_data_between($profile_page, '<img alt="profile image" src="http://secondlife.com/app/image/','/1" class="parcelimg" />');
+}
+/**
+* Extracts the user name from the linden user profile
+*/
+function metaverse_extract_username($profile_page) {
+  return metaverse_get_data_between($profile_page, '<title>','</title>');
+}
+
+/*
+ * metaverse_grid returns a grid record array
+ * based on the grid id (grid_id) or name (grid) passed.
+ * if both are passed, preference is given to id.
+ * pass 0 as id to ignore id.
+ * if no grid exists, FALSE is returned
+ *
+ */
+function metaverse_grid($grid_id, $grid_name = '') {
+  $grid = new stdClass;
+  $result = FALSE;
+  // easy case to rule out.....
+  if (($grid_id < 1) && ($grid_name == '')) return FALSE;
+  // now start with the grid_id
+  if ($grid_id > 0) {
+    // valid grid id, so we ask for the record.
+    $result = db_query('SELECT * FROM {metaverse_grids} WHERE grid_id = %d', $grid_id);
+  }
+  if ($result == FALSE) {
+    // grid_id query didn't work so try grid name
+    $result = db_query("SELECT * FROM {metaverse_grids} WHERE grid_name = '%s'", $grid_name);
+    $grid = db_fetch_object($result);
+  }
+  return $grid;
+}
+
+function metaverse_grid_named($grid_name) {
+  if (!$grid_name) return FALSE;
+  // $grid = new stdClass;
+  $result = db_query("SELECT * FROM {metaverse_grids} WHERE grid_name = '%s'", $grid_name);
+  $grid = db_fetch_object($result);
+  return $grid;
+}
+
+function metaverse_grid_id($grid_id) {
+  if ($grid_id < 1) return FALSE;
+  $result = db_query('SELECT * FROM {metaverse_grids} WHERE grid_id = %d', $grid_id);
+  return db_fetch_array($result);
+}
+
+function metaverse_grid_name_for_id($grid_id) {
+  $grid = metaverse_grid_id($grid_id);
+  $grid_name = $grid['name'];
+  if (!$grid_name) $grid_name = t('Unknown Grid');
+  return $grid_name;
+}
+
+/*
+ * Return a dropdown form element to allow choosing an appropriate grid.
+ */
+function metaverse_grids_dropdown($current_grid_id = 0) {
+  // get a list of grids to display....
+  $grid_query = db_query("SELECT grid_id, grid_name FROM {metaverse_grids} WHERE grid_restricted != 1 ORDER BY grid_id ASC");
+  $grid_options = array('0' => '-- None.');
+  while ($grid = db_fetch_array($grid_query)) {
+  	$grid_options[$grid['grid_id']] = $grid['grid_name'];
+  }
+  
+  // drop-down menu of grids....
+  return array(
+    '#type' => 'select', 
+    '#title' => t('Please select a grid'),
+    '#default_value' => $current_grid_id,
+    '#options' => $grid_options,
+//    '#description' => t('You can choose a grid here, or none.'),
+  );
+}
+
+/*
+ * Return a dropdown form element to allow choosing an appropriate region.
+ */
+function metaverse_regions_dropdown($grid_id, $current_region_id = 0) {
+  // get a list of regions to display....
+  // if no grid is specified, return all regions. (for now.)
+  if ($grid_id == 0) $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} WHERE region_restricted != 1 ORDER BY region_id ASC");
+  else $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} WHERE region_restricted != 1 AND grid_id = %d ORDER BY region_id ASC", $grid_id);
+/*  if ($grid_id == 0) $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} ORDER BY region_name ASC");
+  else $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} WHERE grid_id = %d ORDER BY region_name ASC", $grid_id);*/
+  $region_options = array('0' => '-- None.');
+  while ($region = db_fetch_array($region_query)) {
+  	$region_options[$region['region_id']] = $region['region_name'];
+  }
+
+  // drop-down menu of regions....
+  return array(
+    '#type' => 'select',
+    '#title' => t('Please select a region'),
+    '#default_value' => $current_region_id,
+    '#options' => $region_options,
+    '#description' => t('You can choose a region here, or none.'),
+  );
+}
+
+/*
+ * Return a string with the name of the region, given a region_id
+ */
+function metaverse_region_name_for_id($region_id) {
+  $query = db_query('SELECT name FROM {metaverse_regions} WHERE region_id = %d', $region_id);
+  $result = db_result($query);
+  if ($result == FALSE) $result = '<unknown region>';
+  return $result;
+}
+
+
+/*
+ *  --------- Big Deal Here
+ *
+ * Here we begin the implementation of $metaverses and $regions as 'singletons.'
+ * There will be global $metaverses and $regions variables, and accessor functions.
+ *
+ * Initially, marked with s_ so we can avoid namespace collision.
+ * Later, migrate away from that naming convention.
+ *
+ */
+
+function s_metaverse_all_grids($restricted = 0) {
+  global $metaverses;
+  // we want to erase the 'cache' here, because the point is to minimize SQL access.
+  $metaverses = array();
+  $query = db_query('SELECT * FROM {metaverse_grids} WHERE grid_restricted = %d', $restricted);
+  while($mv = db_fetch_object($query)) {
+    $metaverses[$mv->grid_id] = $mv;
+  }
+  return $metaverses;
+}
+
+function s_metaverse_grid_name_for_id($grid_id = 0) {
+  $grid = s_metaverse_for_grid_id($grid_id);
+  if ($grid != FALSE) {
+    return $grid->grid_name;
+  }
+  else {
+    return '<Unknown Grid>';
+  }
+}
+
+function s_metaverse_for_grid_id($grid_id = 0) {
+  if ($grid_id == 0) return NULL;
+  global $metaverses;
+  if (isset($metaverses[$grid_id])) return $metaverses[$grid_id];
+  $result = db_query('SELECT * FROM {metaverse_grids} WHERE grid_id = %d', $grid_id);
+  if ($mv = db_fetch_object($result)) $metaverses[$mv->grid_id] = $mv;
+  return $mv;
+}
+
+function s_metaverse_for_grid_name($grid_name = '') {
+  if ($grid_name == '') return NULL;
+  global $metaverses;
+  foreach($metaverses as $mv) {
+    if ($mv->grid_name == $grid_name) return $mv;
+  }
+  $result = db_query("SELECT * FROM {metaverse_grids} WHERE grid_name = '%s'", $grid_name);
+  if ($mv = db_fetch_object($result)) $metaverses[$mv->grid_id] = $mv;
+  return $mv;
+}
+
+function s_metaverse_current() {
+  // based on current header info, return a metaverse object
+  return s_metaverse_for_shard_name($_SERVER['HTTP_X_SECONDLIFE_SHARD']);
+}
+
+function s_metaverse_for_shard_name($shard_name = '') {
+  if ($shard_name == '') return NULL;
+  global $metaverses;
+  if (isset($metaverses)) {
+    foreach($metaverses as $mv) {
+      if ($mv->shard_name == $shard_name) return $mv;
+    }
+  }
+  $result = db_query("SELECT * FROM {metaverse_grids} WHERE shard_name = '%s'", $shard_name);
+  if ($mv = db_fetch_object($result)) $metaverses[$mv->grid_id] = $mv;
+  return $mv;
+}
+
+/*
+ * Same thing for regions.....
+ *
+ */
+
+function s_metaverse_region_name_for_region_id($region_id = 0) {
+  $region = s_metaverse_region_for_region_id($region_id);
+  if ($region != FALSE) {
+    return $region->region_name;
+  }
+  return '<unknown region>';
+}
+
+function s_metaverse_region_for_region_id($region_id = 0) {
+  if ($region_id == 0) return NULL;
+  global $regions;
+  if (isset($regions[$region_id])) return $regions[$region_id];
+  $query = db_query('SELECT * FROM {metaverse_regions} WHERE region_id = %d', $region_id);
+  if ($region = db_fetch_object($query)) $regions[$region->region_id] = $region;
+  return $region;
+}
+
+function s_metaverse_region_for_name($grid_id = 0, $region_name = '') {
+  // Region names are only unique per grid, so we have to
+  // compare against grid_id, too
+  if (($region_name == '') || ($grid_id == 0)) return NULL;
+  global $regions;
+  foreach($regions as $region) {
+    if (($region->grid_id == $grid_id) && ($region->region_name == $region_name)) return $region;
+  }
+  $query = db_query("SELECT * FROM {metaverse_regions} WHERE grid_id = %d AND region_name = '%s'", $grid_id, $region_name);
+  if ($region = db_fetch_object($query)) $regions[$region->region_id] = $region;
+  return $region;
+}
+
+function s_metaverse_region_current() {
+  $region = $_SERVER['HTTP_X_SECONDLIFE_REGION'];
+  preg_match_all('/(.*) \((\d+), (\d+)\)/', $region, $temp);
+  $region_name = $temp[1][0];
+  $grid = s_metaverse_current();
+  return s_metaverse_region_for_name($grid->grid_id, $region_name);
+}
+
+function s_metaverse_local_position_current() {
+  $position = $_SERVER['HTTP_X_SECONDLIFE_LOCAL_POSITION'];
+  preg_match_all('/\((.*), (.*), (.*)\)/', $mv->position, $temp);
+  $pos->x = $temp[1][0];
+  $pos->y = $temp[2][0];
+  $pos->z = $temp[3][0];
+  return $pos;
+}
+
+
+
+
