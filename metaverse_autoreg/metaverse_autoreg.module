@@ -1,0 +1,207 @@
+<?php
+// $Id$
+/**
+ * @package	metaverse_autoreg
+ * @copyright	Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
+ * @license		GNU/GPL, http://www.gnu.org/licenses/gpl-2.0.html
+ * SlUser is free software. This version may have been modified pursuant to the GNU General Public License,
+ * and as distributed it includes or is derivative of works licensed under the GNU General Public License
+ * or other free or open source software licenses.
+ */
+
+
+//require_once ( dirname(__FILE__) . '/metaverse_autoreg.inworld.inc');
+
+
+/**
+* Implementation of secondlife module's hook_dispatch()
+*/
+function metaverse_autoreg_dispatch($cmd, &$sl, $args) {
+  $response = array();
+  
+  // check site password
+  if ($args["password"] != variable_get("metaverse_autoreg_password", "")) {
+    $response['status'] = FALSE;
+    $response['message'] = 'error;'. t('Wrong autoregistration password.');
+  }
+  else { // password is OK, so we route the command
+    switch (strtolower($cmd)) {
+      case 'autoregister':
+        $response = _metaverse_autoreg_add_user($sl, $args);
+        break;
+      default:
+        $response['status'] = FALSE;
+        $response['message'] = t('Oops! Unknown command:'). $cmd;
+        break;
+    }
+  }
+  $sl->response['status'] = $response['status'];
+  $sl->response['message'] = $response['message'];
+}
+
+/**
+* Implementation of hook_help().
+*/
+function metaverse_autoreg_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#metaverse_autoreg':
+      $output = '<p>'. t('The metaverse_autoreg module allows a scripted in-world object to register a new user from inworld. Can replace SLRegUser module.') .'</p>';
+      return $output;
+  }
+}
+
+/**
+* Implementation of hook_menu().
+* We only need to set up an admin menu.
+*/
+function metaverse_autoreg_menu() {
+  $items['admin/settings/metaverse/metaverse_autoreg'] = array(
+    'title'                        => t('Second Life In-World Autoregistration'),
+    'description'             => t('Settings for the metaverse_autoreg module.'),
+    'page callback'         => 'drupal_get_form',
+    'page arguments'    => array('_metaverse_autoreg_settings'),
+    'access arguments'  => array('administer site configuration'),
+    'type'                        => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+/**
+* Settings callback
+*/
+function _metaverse_autoreg_settings() {
+  $form['metaverse_autoreg'] = array(
+        '#type'           => 'fieldset',
+        '#title'            => t('Auto Registration'),
+        '#collapsible'  => TRUE,
+        '#collapsed'    => FALSE,
+  );
+  $form['metaverse_autoreg']['metaverse_autoreg_allow_registration'] = array(
+        '#type'                 => 'checkbox',
+        '#title'                  => t('Allow automatic registration'),
+        '#default_value'  => variable_get('metaverse_autoreg_allow_registration', 1),
+        '#description'       => t('Use this to turn off registration from in-world.'),
+  );
+  $form['metaverse_autoreg']['metaverse_autoreg_password'] = array(
+        '#type'                 => 'textfield',
+        '#title'                  => t('Password'),
+        '#default_value'  => variable_get('metaverse_autoreg_password', "CHANGE THIS"),
+        '#description'       => t('A password for registrations from in-world. (Put this in your LSL script.)'),
+  );
+
+  $form['settings'] = module_invoke_all('metaverse_autoreg', 'settings');
+  return system_settings_form($form);
+}
+
+/**
+* Register the user
+*/
+function _metaverse_autoreg_add_user(&$sl, $args) {
+  $reponse = array();
+  // is autoreg turned completely off?
+  if (! variable_get('metaverse_autoreg_allow_registration', FALSE)) {
+    $response['status'] = FALSE;
+    $response['message'] = 'error;'. t('In-world registrations are currently disabled.');
+    return $response;
+  }
+
+  $mv = s_metaverse_for_shard_name($_SERVER['HTTP_X_SECONDLIFE_SHARD']);
+  if ($mv == NULL) return;
+  if ($mv->grid_restricted) return;
+  $drupal_name = $args['website_username'] . ' ' . $mv->grid_nick;;
+  // does this user already exist?
+  // POLICY: if the drupal acct exists, no in-world data is added
+  $values = array(
+    'name' => $drupal_name
+  );
+  $account = user_load($values);
+  if ($account) {
+    $response['status'] = FALSE;
+    $response['message'] = 'error;'. t('An account with that login name already exists.');
+    return $response;
+  }
+
+  // Verify the syntax of the given name.
+  $check_username = user_validate_name($drupal_name);
+  if ($check_username != "") {
+    $response['status'] = FALSE;
+    $response['message'] = "error;". $check_username;
+    return $response;
+  }
+  
+  // unique junk email.
+  $email = $args['user_key'] . "@" . $_SERVER['HTTP_HOST'];
+  $password = generatePassword();
+  
+  // set up our mv_user info
+  $mv_u = new stdClass();
+  $mv_u->grid_id = $mv->grid_id;
+  $mv_u->avatar_name = $args['sl_username'];
+  $mv_u->uuid = $args['user_key'];
+  $mv_u->reg_key = generatePassword();
+  $mv_u->inworld_verified = $args['verified_inworld'];
+  $mv_u->display = TRUE;
+    
+  // set up our user info
+  $values = array(
+    'name'  => $drupal_name,
+    'mail'    => $email,
+    'pass'   => $password,
+    'status' => 1,
+    'roles'   => array_filter(variable_get('metaverse_user_default_roles', array())),
+  );
+
+  // give that to drupal
+  $account = user_save('', $values);
+  // now tell metaverse_user to save the MV stuff
+  $mv_u->uid = $account->id;
+  $edit['metaverse_user'] = array($mv_u);
+  _metaverse_user_save($edit, $account, 'account');
+  if ($account != FALSE) {
+    $response['id'] = $account->id;
+    $response['status'] = TRUE;
+    $response['message'] = 'success;'. 'You now have an account at ' . $_SERVER['HTTP_HOST'] . ", with the account name '" . $account->name . "' and password: " . $password . ' If you wish to receive regular emails concerning your account, please log in and verify that your email address setting is valid.';
+//    watchdog('metaverse_autoreg', 'New user: %name.', array('%name' => $account->$name), WATCHDOG_NOTICE);
+  }
+  else {
+    $response['status'] = FALSE;
+    $response['message'] = "error;". t("Error saving user account.");
+    return $response;
+  }
+/*  watchdog('metaverse_autoreg', 'New user: %name.', array('%name' => $account->$name), WATCHDOG_NOTICE, l(t('edit'), 'user/'. $account->uid .'/edit'));
+*/
+  return $response;
+}
+
+/**
+* Generate random passwords....
+*/
+function generatePassword($length=9, $strength=8) {
+	$vowels = 'aeuy';
+	$consonants = 'bdghjmnpqrstvz';
+	if ($strength & 1) {
+		$consonants .= 'BDGHJLMNPQRSTVWXZ';
+	}
+	if ($strength & 2) {
+		$vowels .= "AEUY";
+	}
+	if ($strength & 4) {
+		$consonants .= '23456789';
+	}
+	if ($strength & 8) {
+		$consonants .= '@#$%';
+	}
+ 
+	$password = '';
+	$alt = time() % 2;
+	for ($i = 0; $i < $length; $i++) {
+		if ($alt == 1) {
+			$password .= $consonants[(rand() % strlen($consonants))];
+			$alt = 0;
+		} else {
+			$password .= $vowels[(rand() % strlen($vowels))];
+			$alt = 1;
+		}
+	}
+	return $password;
+}

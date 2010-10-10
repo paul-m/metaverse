@@ -1,0 +1,295 @@
+<?php
+// $Id: $
+/**
+ * @package	metaverse_user
+ * @copyright	Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
+ * @license		GNU/GPL, http://www.gnu.org/licenses/gpl-2.0.html
+ * metaverse_user is free software. This version may have been modified pursuant to the GNU General Public License,
+ * and as distributed it includes or is derivative of works licensed under the GNU General Public License
+ * or other free or open source software licenses.
+ */
+
+/* WHAT IS THIS?
+
+    This is a refactoring of ssm2017 Binder's sluser module.
+    I've modified it to toss out the terminals and regkey stuff.
+    I think it's better to pare it down, and give flexibility
+    for different validation techniques.
+    --Paul Mitchum/Solo Mornington
+*/
+
+/**
+* Implementation of hook_help().
+*/
+function metaverse_user_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#metaverse_user':
+      $output = '<p>'. t('The metaverse_user module allows you to associate Second Life and OpenSimulator users with Drupal users') .'</p>';
+      return $output;
+  }
+}
+
+/**
+*   Implementation of hook_perm()
+
+*/
+function metaverse_user_perm() {
+  // you got a perm?
+  return array(
+    'view all metaverse profiles',
+    'view own metaverse profile',
+    'edit all metaverse profiles', // no one should ever have to change UUIDs.
+    'edit own metaverse profile',   // but admins might want to inworld_validate
+    );
+}
+
+/**
+* Implementation of hook_menu().
+
+* We only need to set up an admin menu.
+
+*/
+function metaverse_user_menu() {
+  $items['admin/settings/metaverse/metaverse_user'] = array(
+    'title' => t('Metaverse User'),
+    'description' => t('Settings for the metaverse_user module.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('_inc_metaverse_user_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+/*
+ * Implementation of hook_user()
+ *
+ */
+function metaverse_user_user($op, &$edit, &$account, $category = NULL) {
+  global $user;
+  switch($op) {
+    case 'load':
+      _metaverse_user_load($account);
+      return;
+      
+    case 'insert':
+      // almost exactly the same as...      
+    case 'update':
+      _metaverse_user_save($edit, $account, $category);
+      return;
+
+    case 'delete':
+      db_query('DELETE FROM {metaverse_user} WHERE uid = %d', $account->uid);
+      return;
+
+    case 'categories':
+      // we have to declare this array in this way
+      // or else the menu system barfs on it.
+      // NO idea why.
+      $myCategories = array();
+      $myCategories[] = array(
+        'name' => 'metaverse_avatars',
+        'title' => t('Metaverse Avatars'),
+        'weight' => 3,
+        'access callback' => '_metaverse_user_avatar_access',
+        'access arguments' => array($account)
+      );
+      return $myCategories;
+      
+    case 'view':
+      _metaverse_user_view($account);
+      return;
+
+    case 'submit':
+      // the edit form was submitted so we need to re-arrange $edit.
+      // basically going from the $form_grid_id model that we made so 
+      // the user would be happy, to the $array['metaverse_user'] model
+      // that hook_user('update'), and _metaverse_user_save like
+      $grids = s_metaverse_all_grids(0); // 0 for unrestricted
+      foreach ($grids as $mv) {
+        $form_grid_id = 'metaverse_user_grid_' . $mv->grid_id;
+        // does this grid have a form element?
+        if (isset($edit[$form_grid_id])) {
+          // if the user wants to delete the avatar, we bypass this
+          // iteration of $form_grid_id
+          if ($edit[$form_grid_id]['delete_avatar'] != 1) {
+            // we only want to do this for grids with a UUID
+            // so that we don't save empty grids in {metaverse_user}
+            if ($edit[$form_grid_id]['uuid'] != '') {
+              $mv_u = (object)$edit[$form_grid_id];
+              $mv_u->grid_id = $mv->grid_id;
+              $edit['metaverse_user'][$mv->grid_id] = $mv_u;
+            }
+          }
+          // remove it from $edit
+          $edit[$form_grid_id] = NULL;
+        }
+      }
+      return;
+      
+/* .... get back to this....
+    case 'validate':
+      _inc_metaverse_user_avatars_validate($edit);
+      return;
+*/
+    case 'form':
+      if ($category == 'metaverse_avatars')
+        // user is editing avatar info.
+        return _inc_metaverse_user_avatars_form($account);
+      return;
+    //case 'register':
+      // actually.... we don't want to let users define MV info on registration
+      // return _metaverse_user_form($account, TRUE); // register = TRUE
+  } // switch
+} // function
+
+/**
+* Build the web profile link
+* EVENTUALLY we should replace this with tokens.
+* DON'T USE. Out of date.
+*/
+function _metaverse_user_build_profile_link($account) {
+  $link = variable_get('metaverse_user_web_profile_link_model',
+    'http://world.secondlife.com/resident/%uuid');
+  // define the path replacers
+  $replacers = array('%uuid' =>$account->metaverse_user_uuid,
+    '%name' =>$account->metaverse_user_name);
+  // replace the strings
+  foreach ($replacers as $key=>$value) {
+    $link = str_replace($key, $value, $link);
+  }
+  return $link;
+}
+
+function _metaverse_user_load(&$account) {
+  // called from hook_user 'load' op.
+  // We want to make an array of grids where this user has avatars.
+  // We load the whole joined table for each grid, so we don't have to
+  // ask about it later.
+  // This might or might not be the best way to do it.
+  // Numeric key for each array element is the grid id.
+  $query = db_query('SELECT {metaverse_user}.*, {metaverse_grids}.* FROM {metaverse_user} JOIN {metaverse_grids} ON {metaverse_user}.grid_id = {metaverse_grids}.grid_id WHERE uid = %d ORDER BY {metaverse_grids}.grid_name', $account->uid);
+  // set up the array if we have any results....
+  if ($mv_u = db_fetch_object($query)) {
+    $account->metaverse_user = array();
+  }
+  // no metaverse_user info so don't add any ->metaverse_user stuff.
+  else return;
+  // start adding grids.
+  do 
+    $account->metaverse_user[$mv_u->grid_id] = $mv_u;
+  while ($mv_u = db_fetch_object($query));
+}
+
+/*
+ * Save the new metaverse_user data from $edit
+ * Called from hook_user update and insert.
+ */
+function _metaverse_user_save(&$edit, $account, $category) {
+  // ok, there are two conditions under which we want to do any saving:
+  // 1) $category is 'account'
+  // 2) $category is 'metaverse_user'
+  // drupal gives us 'account' when the admin creates a user
+  if (($category == 'account') || ($category == 'metaverse_avatars')) {
+    // ok, proper category, so we go to work.
+    // delete the old ones
+    db_query("DELETE FROM {metaverse_user} WHERE uid = %d", $account->uid);
+    if (! isset($edit['metaverse_user'])) return;
+    foreach ($edit['metaverse_user'] as $mv_u) {
+      $mv_u->uid = $account->uid;
+      drupal_write_record('metaverse_user', $mv_u);
+    }
+    $edit['metaverse_user'] = NULL;
+  }
+}
+
+/**
+ * Menu item access callback - check if a user has access to edit
+ * avatar info for $account
+ */
+function _metaverse_user_avatar_access($account) {
+  // revisit this.
+  return TRUE;
+/*  return user_edit_access($account);
+  global $user;
+  if ($account->uid == $user->uid) {
+    if (!user_access('edit own metaverse profile')) return FALSE;
+  } else {
+    if (!user_access('edit all metaverse profiles')) return FALSE;
+  }*/
+}
+
+function metaverse_user_for_uuid($uuid) {
+  // uuid should theoretically be unique, even across grids
+  $result = db_query("SELECT * FROM {metaverse_user} WHERE uuid = '%s'", $uuid);
+  $mv_user = db_fetch_object($result);
+  return $mv_user;
+}
+
+function _metaverse_user_view(&$account) {
+  // Add metaverse stuff to user view
+  // Do we have anything to add?
+  if (!isset($account->metaverse_user)) return;
+  $count = count($account->metaverse_user);
+  if ($count < 1) return;
+  
+  global $user;
+  
+  // We have mv_u info, so let's display it.
+  // It should be stored as a join with metaverse_grids, so easy to display.
+  
+  // ... set up the category...
+  $account->content['metaverse_avatars'] = array(
+    '#type' => 'user_profile_category',
+    '#title' => 'Metaverse Avatars'
+  );
+  // ... and get going on the list of info.
+  foreach ($account->metaverse_user as $mv_u) {
+    // respect privacy settings....
+    if ($mv_u->display || $user->uid == 1) {
+      $account->content['metaverse_avatars']['grid_' . $mv_u->grid_name] = array(
+        '#type' => 'fieldset',
+        '#title' => $mv_u->grid_name, 
+        '#weight' => 5, 
+        '#collapsible' => FALSE, 
+        '#collapsed' => FALSE,
+      );
+      $account->content['metaverse_avatars']['grid_' . $mv_u->grid_name]['name'] = array(
+        '#type' => 'user_profile_item',
+        '#title' => 'Name',
+        '#value' => $mv_u->avatar_name,
+        '#weight' => -1
+      );
+      $account->content['metaverse_avatars']['grid_' . $mv_u->grid_name]['uuid'] = array(
+        '#type' => 'user_profile_item',
+        '#title' => 'UUID',
+        '#value' => $mv_u->uuid,
+        '#weight' => -1
+      );
+    }
+  }
+}
+
+/*
+ * Module admin settings
+ */
+function _inc_metaverse_user_admin_settings() {
+  module_load_include('inc', 'metaverse_user', 'metaverse_user');
+  return _metaverse_user_admin_settings();
+}
+
+/*
+ * Show avatar edit form
+ */
+function _inc_metaverse_user_avatars_form($account) {
+  module_load_include('inc', 'metaverse_user', 'metaverse_user');
+  return _metaverse_user_avatars_form($account);
+}
+
+/*
+ * Validate edited avatar info
+ */
+function _inc_metaverse_user_avatars_validate(&$edit) {
+  module_load_include('inc', 'metaverse_user', 'metaverse_user');
+  return _metaverse_user_avatars_validate($edit);
+}

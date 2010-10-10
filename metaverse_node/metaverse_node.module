@@ -1,0 +1,270 @@
+<?php
+// $Id: nodeapi_example.module,v 1.1.2.1 2009/10/03 16:30:07 rfay Exp $
+
+/**
+ * @file
+ * This file does three things:
+ * 1) Adds metaverse data to all node types (grid, region, coords)
+ * 2) Defines two node types: Grid and Region. These use #1 above for all
+ *   their info
+ * 3) Restricts edit access for Grid and Region so that only user 1 can edit.
+ */
+
+/**
+ * Implementation of hook_form_alter().
+ *
+ * By implementing this hook, we're able to modify any form. We'll only make
+ * changes to two types: a node's content type configuration and edit forms.
+ *
+ */
+function metaverse_node_form_alter(&$form, $form_state, $form_id) {
+  // magic incantation which lets us add an element to only node forms.
+  // one day I will figure out how forms API really works.
+  if (isset($form['type']) && isset($form['#node']) && $form['type']['#value'] .'_node_form' == $form_id) {
+    $node = $form['#node'];
+  	$form['metaverse_node'] = array(
+  	  '#type' => 'fieldset', 
+  	  '#title' => t('Metaverse'), 
+  	  '#weight' => 0, 
+  	  '#collapsible' => TRUE, 
+  	  '#collapsed' => FALSE,
+  	);
+    $form['metaverse_node']['mv_grid_id'] = metaverse_grids_dropdown($node->mv_grid_id);
+    $form['metaverse_node']['mv_grid_id']['#title'] = t('Associate this node with a grid');
+    $form['metaverse_node']['mv_grid_id']['#required'] = TRUE;
+    $form['metaverse_node']['mv_region_id'] = metaverse_regions_dropdown($node->mv_grid_id, $node->mv_region_id);
+    $form['metaverse_node']['mv_region_id']['#title'] = t('Associate this node with a region');
+    $form['metaverse_node']['mv_region_id']['#required'] = TRUE;
+  }
+}
+
+/**
+ * Implementation of hook_nodeapi().
+ *
+ * We will implement several node API operations here. This hook allows us to
+ * act on all major node operations, so we can manage our additional data
+ * appropriately.
+ */
+function metaverse_node_nodeapi(&$node, $op, $teaser, $page) {
+  switch ($op) {
+    case 'validate':
+         break; //<<<--------change this.
+      // we want to put some restrictions on how we use grid and region nodes.
+      // eventually we'll need to check for duplicates.
+      if ($node->type == 'grid' || $node->type == 'region') {
+        if ($node->mv_grid_id == 0) {
+          form_set_error('mv_grid_id', t('You must set a valid grid for this node.'));
+        }
+        else {
+          if (($node->type == 'grid') && ($node->mv_region_id != 0)) {
+            form_set_error('mv_region_id', t('A grid node can not have a region assignment.'));
+          }
+          if (($node->type == 'region') && ($node->mv_region_id == 0)) {
+            form_set_error('mv_region_id', t('A region node must have a region assignment.'));
+          }
+        }
+      }
+      break;
+
+    case 'load':
+      return db_fetch_array(db_query('SELECT * FROM {metaverse_node} WHERE vid = %d', $node->vid));
+      break;
+
+    case 'update':
+      db_query('DELETE FROM {metaverse_node} WHERE vid = %d', $node->vid);
+      drupal_write_record('metaverse_node', $node);
+      break;
+
+    case 'insert':
+      _metaverse_node_add_current($node, FALSE);
+      drupal_write_record('metaverse_node', $node);
+      break;
+
+    case 'delete':
+      db_query('DELETE FROM {metaverse_node} WHERE nid = %d', $node->nid);
+      break;
+
+    case 'delete revision':
+      // Notice that we're matching a single revision based on the node's vid.
+      db_query('DELETE FROM {metaverse_node} WHERE vid = %d', $node->vid);
+      break;
+
+    case 'view':
+      // if there is no grid, then nothing else matters.
+      if (isset($node->mv_grid_id) && $node->mv_grid_id > 0) {
+        // eventually we'll outsource this to an include file.
+        $node->content['metaverse_node'] = _metaverse_node_view_form($node);
+      }
+      break;
+  }
+}
+
+function _metaverse_node_view_form($node) {
+  // we don't want to modify a grid node.
+  if (($node->type == 'grid') || ($node->mv_grid_id == 0)) return;
+  $form['metaverse_node'] = array(
+  	  '#type' => 'fieldset', 
+  	  '#title' => t('Metaverse'), 
+  	  '#weight' => 0, 
+  	  '#collapsible' => TRUE, 
+  	  '#collapsed' => FALSE,
+  );
+  $slurl = metaverse_node_location_url($node);
+  $form['metaverse_node']['mv_slurl'] = array(
+    '#type' => 'item',
+    '#value' => l('Go there now!', $slurl),
+    '#weight' => -10,
+  );
+  $form['metaverse_node']['mv_grid_info'] = array(
+    '#type' => 'item',
+    '#value' => 'Grid: ' . s_metaverse_grid_name_for_id($node->mv_grid_id),
+    '#weight' => -9,
+  );
+  // don't show region info on region nodes.
+  if ($node->type == 'region') return $form;
+  $form['metaverse_node']['mv_region_info'] = array(
+    '#type' => 'item',
+    '#value' => ' Region: ' . s_metaverse_region_name_for_region_id($node->mv_region_id) .
+      ' Coords: ' . $node->mv_node_coord_x . ', ' .
+        $node->mv_node_coord_y . ', ' .
+        $node->mv_node_coord_z,
+    '#weight' => -9,
+  );
+  return $form;
+}
+
+function metaverse_node_location_url($node) {
+  // build a slurl for the given node.
+  // http://slurl.com/secondlife/foobar/1/2/4/?img=image&title=title&msg=message
+  // TO DO: Opensimulator-appropriate urls.
+  if (isset($node->mv_region_id) && isset($node->mv_grid_id)) {
+    $region = s_metaverse_region_for_region_id($node->mv_region_id);
+    $mv = s_metaverse_for_grid_id($node->mv_grid_id);
+    if (!$mv) return '';
+    if ($mv->shard_name == 'Production') { // Second Life
+      $slurl = "http://slurl.com/secondlife/" .
+        urlencode($region->region_name) . '/' .
+        $node->mv_node_coord_x . '/' .
+        $node->mv_node_coord_y . '/' .
+        $node->mv_node_coord_z . '/?title=' .
+        urlencode($node->title) . '&msg=' .
+        urlencode($node->teaser);
+    return $slurl;
+    }
+  }
+  return '';
+}
+
+function metaverse_node_views_api() {
+  // tell the Views API that we exist.
+  // look in metaverse_node.views.inc for abundant details.
+  return array(
+    'api' => 2,
+  );
+}
+
+// HERE WE SET UP GRID AND REGION NODE TYPES
+
+/*
+ * implementation of hook_node_info()
+ */
+function metaverse_node_node_info() {
+  // We define some node types here.
+  // Grid lets us have a node type to represent info in {metaverse_grids}
+  // and region does the same for {metaverse_regions}
+  // These will mostly be generic nodes, and our nodeapi stuff will keep
+  // the metaverse info. We just want to define these so that we can
+  // have CCK-able nodes to say nice things about the grids on the site.
+  return array(
+    'grid' => array(
+      'name' => t('Grid'),
+      'module' => 'metaverse_node',
+      'description' => t('A grid in the metaverse. Generally these are created and maintained by code, not people.'),
+      'has_title' => TRUE,
+      'has_body' => TRUE,
+      'locked' => TRUE
+    ),
+    'region' => array(
+      'name' => t('Region'),
+      'module' => 'metaverse_node',
+      'description' => t('A region on a grid in the metaverse. Generally these are created and maintained by code, not people.'),
+      'has_title' => TRUE,
+      'has_body' => TRUE, // uses good shampoo.
+      'locked' => TRUE
+    ),
+  );
+}
+
+/*
+ * Implementation of hook_access()
+ */
+function metaverse_node_access($op, $node, $account) {
+  $type = $node->type;
+  switch ($op) {
+    case 'update':
+    case 'delete':
+      return user_access('edit ' . $type, $account);
+    default:
+      return user_access($op . ' ' . $type, $account);
+  }
+  return FALSE;
+}
+
+function metaverse_node_perm() {
+  return array(
+    'create grid',
+    'edit grid',
+    'view grid',
+    'create region',
+    'edit region',
+    'view region',
+  );
+}
+
+/*
+ * A VERY GENERIC implementation of hook_form().
+ *
+ */
+function metaverse_node_form(&$node) {
+  // The site admin can decide if this node type has a title and body, and how
+  // the fields should be labeled. We need to load these settings so we can
+  // build the node form correctly.
+  $type = node_get_types('type', $node);
+
+  if ($type->has_title) {
+    $form['title'] = array(
+      '#type' => 'textfield',
+      '#title' => check_plain($type->title_label),
+      '#required' => TRUE,
+      '#default_value' => $node->title,
+      '#weight' => -5
+    );
+  }
+  if ($type->has_body) {
+    $form['body_field'] = node_body_field($node, $type->body_label, $type->min_word_count);
+  }
+  return $form;
+}
+
+/*
+ * Add the current grid and region info to the node.
+ *
+ */
+function _metaverse_node_add_current(&$node) {
+  // if there's no metaverse stuff then we add it, if it exists
+  if (!isset($node->grid_id)) {
+    $region = s_metaverse_region_current();
+    if ($region) {
+      $node->mv_grid_id = $region->grid_id;
+      $node->mv_region_id = $region->region_id;
+      $pos = s_metaverse_local_position_current();
+      $node->mv_node_coord_x = $pos->x;
+      $node->mv_node_coord_y = $pos->y;
+      $node->mv_node_coord_z = $pos->z;
+    }
+  }
+  // return nothing.
+}
+
+
+

@@ -1,0 +1,6 @@
+; $Id: $
+name = Metaverse User API
+description = Map drupal users to metaverse grid users
+dependencies[] = metaverse
+package = Metaverse
+core = 6.x

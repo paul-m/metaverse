@@ -1,0 +1,6 @@
+; $Id: $
+name = Metaverse Node
+description = Map nodes to grids and simulators
+package = Metaverse
+dependencies[] = metaverse
+core = 6.x

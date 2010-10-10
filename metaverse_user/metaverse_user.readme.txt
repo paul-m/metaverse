@@ -1,0 +1,10 @@
+
+the metaverse_user drupal module
+
+WHAT IS METAVERSE_USER?
+
+An abstraction of the SlUser module created by ssm2017binder. I wanted to create a more flexible version that would still be somewhat compatible with the previous version.
+
+metaverse_user module only keeps parity between the drupal user and the SL user. Other modules use it. It only adds forms to the user profile.
+
+The previous version had an elaborate in-world validation scheme. My needs were somewhat different.

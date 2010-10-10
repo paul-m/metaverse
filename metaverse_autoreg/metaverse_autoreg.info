@@ -1,0 +1,7 @@
+; $Id$
+name = Metaverse AutoReg
+description = In-world auto-registration (with some security, we hope)
+dependencies[] = metaverse
+dependencies[] = metaverse_user
+package = Metaverse
+core = 6.x

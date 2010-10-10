@@ -1,0 +1,94 @@
+<?php
+// $Id: metaverse_user.install,v 1.1 2009/01/14 02:20:11 ssm2017binder Exp $
+/**
+ * @package	metaverse_user
+ * @copyright	Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
+ * @license		GNU/GPL, http://www.gnu.org/licenses/gpl-2.0.html
+ * metaverse_user is free software. This version may have been modified pursuant to the GNU General Public License,
+ * and as distributed it includes or is derivative of works licensed under the GNU General Public License
+ * or other free or open source software licenses.
+ */
+
+/**
+* Implementation of hook_install().
+*/
+function metaverse_user_install() {
+  // Create tables.
+  drupal_install_schema('metaverse_user');
+}
+
+/**
+* Implementation of hook_uninstall().
+*/
+function metaverse_user_uninstall() {
+  // Remove tables.
+  drupal_uninstall_schema('metaverse_user');
+  // Remove variables.
+  db_query("DELETE FROM {variable} WHERE name LIKE 'metaverse_user%%'");
+}
+
+/**
+* Implementation of hook_schema().
+*/
+function metaverse_user_schema() {
+  $schema['metaverse_user'] = array(
+    'description' => t('Mapping SecondLife/OS users to Drupal users.'),
+    'fields' => array(
+      'id'               => array(
+      'type'             => 'serial',
+      'not null'        => TRUE,
+      'description'   => t('Primary Key: Unique metaverse_user ID.'),
+      ),
+      'uid'               => array(
+      'type'             => 'int',
+      'not null'        => TRUE,
+      'default'         => 0,
+      'description'   => t("User's {users}.uid."),
+      ),
+      'grid_id'               => array(
+      'type'             => 'int',
+      'not null'        => TRUE,
+      'default'         => 0,
+      'description'   => t("grid ID for user."),
+      ),
+      'avatar_name'   => array(
+      'type'             => 'varchar',
+      'length'          => 255,
+      'not null'        => TRUE,
+      'default'         => '',
+      'description'   => t('Metaverse user name.'),
+      ),
+      'uuid'      => array(
+      'type'             => 'varchar',
+      'length'          => 36,
+      'not null'        => TRUE,
+      'default'         => '',
+      'description'   => t('Metaverse user key.'),
+      ),
+      'reg_key'      => array(
+      'type'             => 'varchar',
+      'length'          => 10,
+      'not null'        => TRUE,
+      'default'         => '',
+      'description'   => t('Registration key.'),
+      ),
+      'inworld_verified'      => array(
+      'type'             => 'int',
+      'length'          => 'tiny',
+      'not null'        => TRUE,
+      'default'         => 0,
+      'description'   => t('User grid info is verified as matching an avatar in-world.'),
+      ),
+      'display'      => array(
+      'type'             => 'int',
+      'length'          => 'tiny',
+      'not null'        => TRUE,
+      'default'         => 0,
+      'description'   => t('If this is nonzero, show this avatar to the world.'),
+      ),
+      
+    ),
+    'primary key'    => array('id'),
+  );
+  return $schema;
+}
