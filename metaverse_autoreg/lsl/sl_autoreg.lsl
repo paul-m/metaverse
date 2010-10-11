@@ -6,7 +6,7 @@ default
     {
         if (llDetectedKey(0) == llGetOwner())
         {
-            gRequest = llHTTPRequest("http://gridlist.net/inworld",
+            gRequest = llHTTPRequest("http://SOMEDOMAIN.COMMIE/inworld",
                             [HTTP_METHOD, "POST",
                             HTTP_MIMETYPE, "application/x-www-form-urlencoded"],
                             "app=metaverse_autoreg" +
