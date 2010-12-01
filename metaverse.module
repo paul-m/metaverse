@@ -37,8 +37,8 @@ function metaverse_boot() {
         $tempa = split(", ", $_SERVER['HTTP_X_FORWARDED_FOR']);
         $remote_addr = trim($tempa[1]);
       }
-      foreach($subnets as $network) {
-        if(metaverse_netmatch($network, $remote_addr)) {
+      foreach ($subnets as $network) {
+        if (metaverse_netmatch($network, $remote_addr)) {
           $valid_ip = TRUE;
           break;
         }
@@ -197,7 +197,7 @@ function metaverse_get_session() {
 function metaverse_parse_args($arg) {
   // this model isn't so great. but we'll play along for now.
   $args = array();
-  foreach(explode(variable_get('metaverse_args_separator', ':'), $arg) as $pair) {
+  foreach (explode(variable_get('metaverse_args_separator', ':'), $arg) as $pair) {
     list($key, $value) = explode('=', $pair);
     $args[$key] = $value;
   }
@@ -213,15 +213,15 @@ function metaverse_send_response(&$sl) {
   $sl->response['cmd'] = $sl->cmd;
 
   if ($debug) {
-    foreach($sl->response as $key => $value) {
+    foreach ($sl->response as $key => $value) {
       metaverse_debug("RESPONSE: $key = $value");
     }
   }
 
-  switch($sl->output_type) {
+  switch ($sl->output_type) {
     default:
     case 'full':
-      foreach($sl->response as $key => $value) {
+      foreach ($sl->response as $key => $value) {
         print "$key=$value:";
       }
       print "\n";
@@ -257,11 +257,11 @@ function metaverse_netmatch($network, $ip) {
  */
 function metaverse_get_data_between($src, $left, $right) {
   // function to return the data between two tokens (VERY USEFUL)
-  $ids = stripos($src,$left) + strlen($left);
-  if($ids === false) return false;
-  $ide = stripos($src,$right,$ids);
-  if($ide === false) return false;
-  return(substr($src,$ids,$ide - $ids));
+  $ids = stripos($src, $left) + strlen($left);
+  if ($ids === FALSE) return FALSE;
+  $ide = stripos($src, $right, $ids);
+  if ($ide === FALSE) return FALSE;
+  return (substr($src, $ids, $ide - $ids));
 }
 
 /**
@@ -273,7 +273,7 @@ function metaverse_get_linden_user_profile($user_key) {
     $result = "$errstr ($errno)<br />\n";
   }
   else {
-    $out = "GET /resident/".$user_key." HTTP/1.1\r\n";
+    $out = "GET /resident/" . $user_key . " HTTP/1.1\r\n";
     $out .= "Host: world.secondlife.com\r\n";
     $out .= "Connection: Close\r\n\r\n";
     fwrite($fp, $out);
@@ -289,13 +289,13 @@ function metaverse_get_linden_user_profile($user_key) {
 * Extracts the profile picture key from the linden user profile
 */
 function metaverse_extract_picture_key($profile_page) {
-  return metaverse_get_data_between($profile_page, '<img alt="profile image" src="http://secondlife.com/app/image/','/1" class="parcelimg" />');
+  return metaverse_get_data_between($profile_page, '<img alt="profile image" src="http://secondlife.com/app/image/', '/1" class="parcelimg" />');
 }
 /**
 * Extracts the user name from the linden user profile
 */
 function metaverse_extract_username($profile_page) {
-  return metaverse_get_data_between($profile_page, '<title>','</title>');
+  return metaverse_get_data_between($profile_page, '<title>', '</title>');
 }
 
 /*
@@ -350,10 +350,10 @@ function metaverse_grid_name_for_id($grid_id) {
  */
 function metaverse_grids_dropdown($current_grid_id = 0) {
   // get a list of grids to display....
-  $grid_query = db_query("SELECT grid_id, grid_name FROM {metaverse_grids} WHERE grid_restricted != 1 ORDER BY grid_id ASC");
+  $grid_query = db_query("SELECT grid_id, grid_name FROM {metaverse_grids} WHERE grid_restricted <> 1 ORDER BY grid_id ASC");
   $grid_options = array('0' => '-- None.');
   while ($grid = db_fetch_array($grid_query)) {
-  	$grid_options[$grid['grid_id']] = $grid['grid_name'];
+    $grid_options[$grid['grid_id']] = $grid['grid_name'];
   }
   
   // drop-down menu of grids....
@@ -372,13 +372,13 @@ function metaverse_grids_dropdown($current_grid_id = 0) {
 function metaverse_regions_dropdown($grid_id, $current_region_id = 0) {
   // get a list of regions to display....
   // if no grid is specified, return all regions. (for now.)
-  if ($grid_id == 0) $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} WHERE region_restricted != 1 ORDER BY region_id ASC");
-  else $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} WHERE region_restricted != 1 AND grid_id = %d ORDER BY region_id ASC", $grid_id);
+  if ($grid_id == 0) $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} WHERE region_restricted <> 1 ORDER BY region_id ASC");
+  else $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} WHERE region_restricted <> 1 AND grid_id = %d ORDER BY region_id ASC", $grid_id);
 /*  if ($grid_id == 0) $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} ORDER BY region_name ASC");
   else $region_query = db_query("SELECT region_id, region_name FROM {metaverse_regions} WHERE grid_id = %d ORDER BY region_name ASC", $grid_id);*/
   $region_options = array('0' => '-- None.');
   while ($region = db_fetch_array($region_query)) {
-  	$region_options[$region['region_id']] = $region['region_name'];
+    $region_options[$region['region_id']] = $region['region_name'];
   }
 
   // drop-down menu of regions....
@@ -418,7 +418,7 @@ function s_metaverse_all_grids($restricted = 0) {
   // we want to erase the 'cache' here, because the point is to minimize SQL access.
   $metaverses = array();
   $query = db_query('SELECT * FROM {metaverse_grids} WHERE grid_restricted = %d', $restricted);
-  while($mv = db_fetch_object($query)) {
+  while ($mv = db_fetch_object($query)) {
     $metaverses[$mv->grid_id] = $mv;
   }
   return $metaverses;
@@ -446,7 +446,7 @@ function s_metaverse_for_grid_id($grid_id = 0) {
 function s_metaverse_for_grid_name($grid_name = '') {
   if ($grid_name == '') return NULL;
   global $metaverses;
-  foreach($metaverses as $mv) {
+  foreach ($metaverses as $mv) {
     if ($mv->grid_name == $grid_name) return $mv;
   }
   $result = db_query("SELECT * FROM {metaverse_grids} WHERE grid_name = '%s'", $grid_name);
@@ -463,7 +463,7 @@ function s_metaverse_for_shard_name($shard_name = '') {
   if ($shard_name == '') return NULL;
   global $metaverses;
   if (isset($metaverses)) {
-    foreach($metaverses as $mv) {
+    foreach ($metaverses as $mv) {
       if ($mv->shard_name == $shard_name) return $mv;
     }
   }
@@ -499,7 +499,7 @@ function s_metaverse_region_for_name($grid_id = 0, $region_name = '') {
   // compare against grid_id, too
   if (($region_name == '') || ($grid_id == 0)) return NULL;
   global $regions;
-  foreach($regions as $region) {
+  foreach ($regions as $region) {
     if (($region->grid_id == $grid_id) && ($region->region_name == $region_name)) return $region;
   }
   $query = db_query("SELECT * FROM {metaverse_regions} WHERE grid_id = %d AND region_name = '%s'", $grid_id, $region_name);

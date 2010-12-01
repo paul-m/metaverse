@@ -1,9 +1,12 @@
 <?php
-
-/* this file contains various helper functions that aren't called frequently
- * such as admin form literals
+// $Id$
+/**
+ * @file
+ * Infrequently-used functions and text literals
+ *
+ * We keep the .module file slim by moving the bloat here.
  */
-
+ 
 function _metaverse_settings_form() {
   $options = array(
     0 => t('User page'),
@@ -132,8 +135,8 @@ function _metaverse_enable() {
   );
   // eventually delete this entry; it's here for testing.
   $farstone = array(
-  	'grid_id' => 1, // we hope this is correct. :-)
-  	'region_name' => 'Farstone',
+    'grid_id' => 1, // we hope this is correct. :-)
+    'region_name' => 'Farstone',
   );
   drupal_write_record('metaverse_grids', $sl);
   drupal_write_record('metaverse_grids', $slp);

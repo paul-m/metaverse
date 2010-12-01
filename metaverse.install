@@ -1,9 +1,16 @@
 <?php
 // $Id: $
 /**
- * @package	metaverse
- * @copyright	Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
- * @license		GPL
+ * @package metaverse
+ * @copyright Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
+ * @license   GPL
+ */
+
+/**
+ * @file
+ * Install file for metaverse module.
+ *
+ * Set up databse tables, mostly.
  */
 
 /**
@@ -33,55 +40,55 @@ function metaverse_schema() {
     'description' => t('Grids out there in the metaverse'),
     'fields' => array(
       'grid_id' => array(
-	      'type' => 'serial',
-	      'not null' => TRUE,
-	      'description' => t('grid ID')
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => t('grid ID')
       ),
       'nid' => array(
-	      'type' => 'int',
-	      'not null' => TRUE,
-	      'default' => 0,
-	      'description' => t('The node that describes us.')
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => t('The node that describes us.')
       ),
       'vid' => array(
-	      'type' => 'int',
-	      'not null' => TRUE,
-	      'default' => 0,
-	      'description' => t('The node revision that describes us.')
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => t('The node revision that describes us.')
       ),
       'grid_restricted' => array(
-	      'type' => 'int',
-	      'not null' => TRUE,
-	      'default' => 0,
-	      'description' => t('restrict access for this grid')
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => t('restrict access for this grid')
       ),
       'grid_name' => array(
-	      'type' => 'varchar',
-	      'length' => 255,
-	      'not null' => TRUE,
-	      'default' => '',
-	      'description' => t('human-readable name')
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => t('human-readable name')
       ),
       'grid_nick' => array(
-	      'type' => 'varchar',
-	      'length' => 4,
-	      'not null' => TRUE,
-	      'default' => '',
-	      'description' => t('human-readable very short nickname (like SL)')
+        'type' => 'varchar',
+        'length' => 4,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => t('human-readable very short nickname (like SL)')
       ),
       'shard_name' => array(
-	      'type' => 'varchar',
-	      'length' => 36,
-	      'not null' => TRUE,
-	      'default' => '',
-	      'description' => t('machine-readable grid name from x-secondlife-shard')
+        'type' => 'varchar',
+        'length' => 36,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => t('machine-readable grid name from x-secondlife-shard')
       ),
       'grid_allowed_ips' => array(
-	      'type' => 'varchar',
-	      'length' => 255,
-	      'not null' => FALSE,
-	      'default' => '',
-	      'description' => t('valid IP addresses for this grid.')
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'default' => '',
+        'description' => t('valid IP addresses for this grid.')
       )
     ),
     'indexes' => array(
@@ -97,51 +104,51 @@ function metaverse_schema() {
     'description' => t('Any simulator'),
     'fields' => array(
       'region_id' => array(
-	      'type' => 'serial',
-	      'not null' => TRUE,
-	      'description' => t('simulator ID')
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => t('simulator ID')
       ),
       'grid_id' => array(
-	      'type' => 'int',
-	      'not null' => TRUE,
-	      'description' => t('Grid where this region lives')
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => t('Grid where this region lives')
       ),
       'nid' => array(
-	      'type' => 'int',
-	      'not null' => TRUE,
-	      'default' => 0,
-	      'description' => t('The node that describes us.')
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => t('The node that describes us.')
       ),
       'vid' => array(
-	      'type' => 'int',
-	      'not null' => TRUE,
-	      'default' => 0,
-	      'description' => t('The node revision that describes us.')
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => t('The node revision that describes us.')
       ),
       'region_restricted' => array(
-	      'type' => 'int',
-	      'not null' => TRUE,
-	      'default' => 0,
-	      'description' => t('restrict access for this simulator')
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => t('restrict access for this simulator')
       ),
       'region_name' => array(
-	      'type' => 'varchar',
-	      'length' => 255,
-	      'not null' => TRUE,
-	      'default' => '',
-	      'description' => t('human-readable name')
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => t('human-readable name')
       ),
       'region_coords_x' => array(
-	      'type' => 'int',
-	      'not null' => FALSE,
-	      'default' => 0,
-	      'description' => t('grid coords for simulator')
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'description' => t('grid coords for simulator')
       ),
       'region_coords_y' => array(
-	      'type' => 'int',
-	      'not null' => FALSE,
-	      'default' => 0,
-	      'description' => t('grid coords for simulator')
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+        'description' => t('grid coords for simulator')
       ),
     ),
     'unique keys' => array(
