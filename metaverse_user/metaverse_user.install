@@ -1,5 +1,5 @@
 <?php
-// $Id: metaverse_user.install,v 1.1 2009/01/14 02:20:11 ssm2017binder Exp $
+// $Id: $
 /**
  * @package	metaverse_user
  * @copyright	Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
@@ -7,6 +7,13 @@
  * metaverse_user is free software. This version may have been modified pursuant to the GNU General Public License,
  * and as distributed it includes or is derivative of works licensed under the GNU General Public License
  * or other free or open source software licenses.
+ */
+
+/**
+ * @file
+ * Install file for metaverse_user module
+ *
+ * Add a nifty SQL table. woot.
  */
 
 /**

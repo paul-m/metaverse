@@ -1,16 +1,15 @@
 <?php
 // $Id: $
 
-
-
-/*
- * Views API stuff.....
+/**
+ * @file
+ * Views API stuff for metaverse_node module
  */
 
 /*
  * Implementation of hook_views_data()
  */
-function metaverse_node_views_data	() {
+function metaverse_node_views_data() {
   // We want our special MV data to show up under 'Node' in
   // the Views UI. We're piggybacking on Node, JUST LIKE REVISIONS. :-)
   $data['metaverse_node']['table']['group'] = t('Node');

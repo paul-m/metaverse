@@ -1,8 +1,16 @@
 <?php
+// $Id: $
 /**
- * @package	metaverse_node
- * @copyright	Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
- * @license		who knows.
+ * @file
+ * Install file for metaverse_node module
+ *
+ * Add a nifty SQL table. woot.
+ */
+
+/**
+ * @package metaverse_node
+ * @copyright Copyright (C) 2010 Paul Mitchum/Solo Mornington. All rights reserved.
+ * @license   who knows.
  */
 
 /**
@@ -27,60 +35,61 @@ function metaverse_node_uninstall() {
 */
 function metaverse_node_schema() {
   $schema['metaverse_node'] = array(
-    'description'                   => t('Map nodes to metaverse grids and sims'),
-    'fields'                        => array(
-      'id'                          => array(
-      'type'                        => 'serial',
-      'not null'                    => TRUE,
-      'description'                 => t('Primary Key: Unique ID.'),
+    'description'                     => t('Map nodes to metaverse grids and sims'),
+    'fields'            => array(
+      'id'              => array(
+      'type'            => 'serial',
+      'not null'        => TRUE,
+      'description'     => t('Primary Key: Unique ID.'),
       ),
-      'nid'                         => array(
-      'type'                        => 'int',
-      'not null'                    => TRUE,
-      'description'                 => t('Our node pal.'),
+      'nid'             => array(
+      'type'            => 'int',
+      'not null'        => TRUE,
+      'description'     => t('Our node pal.'),
       ),
-      'vid'                         => array(
-      'type'                        => 'int',
-      'not null'                    => TRUE,
-      'description'                 => t('Version ID for revision system.'),
+      'vid'             => array(
+      'type'            => 'int',
+      'not null'        => TRUE,
+      'description'     => t('Version ID for revision system.'),
       ),
-      'mv_grid_id'                         => array(
-      'type'                        => 'int',
-      'size'						=> 'normal',
-      'not null'                    => TRUE,
-      'default'                     => 0,
-      'description'                 => t('Originating metaverse_grids id for node.'),
+      'mv_grid_id'      => array(
+      'type'            => 'int',
+      'size'            => 'normal',
+      'not null'        => TRUE,
+      'default'         => 0,
+      'description'     => t('Originating metaverse_grids id for node.'),
       ),
-      'mv_region_id'                         => array(
-      'type'                        => 'int',
-      'size'						=> 'normal',
-      'not null'                    => TRUE,
-      'default'                     => 0,
-      'description'                 => t('Originating metaverse_regions id for node.'),
+      'mv_region_id'    => array(
+      'type'            => 'int',
+      'size'            => 'normal',
+      'not null'        => TRUE,
+      'default'         => 0,
+      'description'     => t('Originating metaverse_regions id for node.'),
       ),
-      'mv_node_coord_x'             => array(
-      'type'                        => 'float',
-      'size'						=> 'normal',
-      'not null'                    => TRUE,
-      'default'                     => 128,
-      'description'                 => t('Sim coords.'),
+      'mv_node_coord_x' => array(
+      'type'            => 'float',
+      'size'            => 'normal',
+      'not null'        => TRUE,
+      'default'         => 128,
+      'description'     => t('Sim coords.'),
       ),
-      'mv_node_coord_y'             => array(
-      'type'                        => 'float',
-      'size'						=> 'normal',
-      'not null'                    => TRUE,
-      'default'                     => 128,
-      'description'                 => t('Sim coords.'),
+      'mv_node_coord_y' => array(
+      'type'            => 'float',
+      'size'            => 'normal',
+      'not null'        => TRUE,
+      'default'         => 128,
+      'description'     => t('Sim coords.'),
       ),
-      'mv_node_coord_z'             => array(
-      'type'                        => 'float',
-      'size'						=> 'normal',
-      'not null'                    => TRUE,
-      'default'                     => 0,
-      'description'                 => t('Sim coords.'),
+      'mv_node_coord_z' => array(
+      'type'            => 'float',
+      'size'            => 'normal',
+      'not null'        => TRUE,
+      'default'         => 0,
+      'description'     => t('Sim coords.'),
       ),
     ),
-    'primary key'                   => array('id'),
+    'primary ke
+y'                   => array('id'),
   );
   return $schema;
 }
