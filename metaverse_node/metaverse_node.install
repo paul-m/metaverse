@@ -88,8 +88,7 @@ function metaverse_node_schema() {
       'description'     => t('Sim coords.'),
       ),
     ),
-    'primary ke
-y'                   => array('id'),
+    'primary key'                   => array('id'),
   );
   return $schema;
 }
