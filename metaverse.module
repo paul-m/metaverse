@@ -16,7 +16,7 @@ function metaverse_boot() {
 
   // If there's no shard header, then we have nothing more to do.
   if (!isset($_SERVER['HTTP_X_SECONDLIFE_SHARD'])) return;
-  $grid = s_metaverse_for_shard_name($_SERVER['HTTP_X_SECONDLIFE_SHARD']);
+  $grid = metaverse_for_shard_name($_SERVER['HTTP_X_SECONDLIFE_SHARD']);
   if ($grid) {
     // ok, we know this comes from a metaverse service, since it
     // has a shard header.
@@ -301,13 +301,9 @@ function metaverse_extract_username($profile_page) {
 /*
  *  --------- Big Deal Here
  *
- * Here we begin the implementation of $metaverses and $regions as 'singletons.'
+ * Here we begin the implementation of metaverses and regions as 'singletons.'
  * There will be global $_metaverse_metaverses and $_metaverse_regions variables,
  * and accessor functions.
- *
- * Initially, marked with s_ so we can avoid namespace collision.
- * Later, migrate away from that naming convention.
- *
  */
 
 function metaverse_all_grids($restricted = 0) {
