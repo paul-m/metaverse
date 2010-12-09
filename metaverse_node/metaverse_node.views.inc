@@ -15,7 +15,7 @@ function metaverse_node_views_data() {
   $data['metaverse_node']['table']['group'] = t('Node');
 
   // TABLES
-  // Define some joins between our table and others. 
+  // Define some joins between our table and others.
   $data['metaverse_node']['table']['join'] = array(
     'node' => array(
       'left_field' => 'nid',
@@ -115,7 +115,7 @@ function metaverse_node_views_data() {
       'handler' => 'views_handler_sort',
     ),
   );
-  
+
   $data['metaverse_node']['mv_node_coord_z'] = array(
     'title' => t('Region Coordinates Z'),
     'help' => t('Z location of this node, in region coords.'),
@@ -149,7 +149,7 @@ function metaverse_node_views_data() {
   );
 
 
-  // Define some joins between our table and others. 
+  // Define some joins between our table and others.
   $data['metaverse_grids']['table']['join'] = array(
     'node' => array(
       'left_field' => 'nid',
@@ -195,7 +195,7 @@ function metaverse_node_views_data() {
       'handler' => 'views_handler_argument_numeric',
     ),
   );
-  
+
   // Example plain text field.
   $data['metaverse_grids']['grid_name'] = array(
     'title' => t('Grid name'),
@@ -214,7 +214,7 @@ function metaverse_node_views_data() {
       'handler' => 'views_handler_argument_string',
     ),
   );
-  
+
   $data['metaverse_grids']['grid_restricted'] = array(
     'title' => t('Restricted'),
     'help' => t('Grid is restricted.'),
@@ -248,7 +248,7 @@ function metaverse_node_views_data() {
       'handler' => 'views_handler_argument_numeric',
     ),
   );
-  
+
   // Example plain text field.
   $data['metaverse_regions']['region_name'] = array(
     'title' => t('Region name'),
@@ -267,7 +267,7 @@ function metaverse_node_views_data() {
       'handler' => 'views_handler_argument_string',
     ),
   );
-  
+
   $data['metaverse_regions']['region_restricted'] = array(
     'title' => t('Restricted'),
     'help' => t('Region is restricted.'),
@@ -282,8 +282,5 @@ function metaverse_node_views_data() {
       'handler' => 'views_handler_filter_boolean_operator',
     ),
   );
-
-
-
   return $data;
 }

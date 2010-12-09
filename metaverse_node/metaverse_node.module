@@ -117,14 +117,14 @@ function _metaverse_node_view_form($node) {
   );
   $form['metaverse_node']['mv_grid_info'] = array(
     '#type' => 'item',
-    '#value' => 'Grid: ' . s_metaverse_grid_name_for_id($node->mv_grid_id),
+    '#value' => 'Grid: ' . metaverse_grid_name_for_id($node->mv_grid_id),
     '#weight' => -9,
   );
   // don't show region info on region nodes.
   if ($node->type == 'region') return $form;
   $form['metaverse_node']['mv_region_info'] = array(
     '#type' => 'item',
-    '#value' => ' Region: ' . s_metaverse_region_name_for_region_id($node->mv_region_id) .
+    '#value' => ' Region: ' . metaverse_region_name_for_region_id($node->mv_region_id) .
       ' Coords: ' . $node->mv_node_coord_x . ', ' .
         $node->mv_node_coord_y . ', ' .
         $node->mv_node_coord_z,
@@ -138,8 +138,8 @@ function metaverse_node_location_url($node) {
   // http://slurl.com/secondlife/foobar/1/2/4/?img=image&title=title&msg=message
   // TO DO: Opensimulator-appropriate urls.
   if (isset($node->mv_region_id) && isset($node->mv_grid_id)) {
-    $region = s_metaverse_region_for_region_id($node->mv_region_id);
-    $mv = s_metaverse_for_grid_id($node->mv_grid_id);
+    $region = metaverse_region_for_region_id($node->mv_region_id);
+    $mv = metaverse_for_grid_id($node->mv_grid_id);
     if (!$mv) return '';
     if ($mv->shard_name == 'Production') { // Second Life
       $slurl = "http://slurl.com/secondlife/" .
@@ -253,11 +253,11 @@ function metaverse_node_form(&$node) {
 function _metaverse_node_add_current(&$node) {
   // if there's no metaverse stuff then we add it, if it exists
   if (!isset($node->grid_id)) {
-    $region = s_metaverse_region_current();
+    $region = metaverse_region_current();
     if ($region) {
       $node->mv_grid_id = $region->grid_id;
       $node->mv_region_id = $region->region_id;
-      $pos = s_metaverse_local_position_current();
+      $pos = metaverse_local_position_current();
       $node->mv_node_coord_x = $pos->x;
       $node->mv_node_coord_y = $pos->y;
       $node->mv_node_coord_z = $pos->z;
@@ -265,6 +265,3 @@ function _metaverse_node_add_current(&$node) {
   }
   // return nothing.
 }
-
-
-

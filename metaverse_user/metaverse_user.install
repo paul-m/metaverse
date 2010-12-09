@@ -93,7 +93,7 @@ function metaverse_user_schema() {
       'default'         => 0,
       'description'   => t('If this is nonzero, show this avatar to the world.'),
       ),
-      
+
     ),
     'primary key'    => array('id'),
   );

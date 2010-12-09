@@ -6,7 +6,7 @@
  *
  * We keep the .module file slim by moving the bloat here.
  */
- 
+
 function _metaverse_settings_form() {
   $options = array(
     0 => t('User page'),
@@ -104,8 +104,8 @@ function _metaverse_settings_form() {
         );*/
   return system_settings_form($form);
 }
-  
-  
+
+
 /* we call this when we want to init a couple of grids into the
    database when the module is enabled.
    this could be a separate module per grid.

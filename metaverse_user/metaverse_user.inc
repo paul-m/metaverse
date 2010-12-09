@@ -1,7 +1,7 @@
 <?php
 // $Id: $
 
-/* 
+/*
  * @file
  * Include file for metaverse_user. Some functions have many string literals
  * and aren't used frequently, so we put them here.
@@ -82,7 +82,7 @@ function _metaverse_user_admin_settings() {
 */
 function _metaverse_user_avatars_form($account, $registering = FALSE) {
 //  global $user; // yes, THAT $user.
-  
+
   // each sub-fieldset will be known by it's grid_id
   // start by getting all the grids
   $grids = s_metaverse_all_grids(0); // 0 for unrestricted

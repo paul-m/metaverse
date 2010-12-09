@@ -19,7 +19,7 @@
 function metaverse_install() {
   // Create tables.
   drupal_install_schema('metaverse');
-/*  drupal_set_message(st("Metaverse module settings are available under !link", 
+/*  drupal_set_message(st("Metaverse module settings are available under !link",
     array( '!link' => l('Administer > Site configuration > Metaverse ',  'admin/settings/yourmodule/settings' ) )
   ));*/
 }
