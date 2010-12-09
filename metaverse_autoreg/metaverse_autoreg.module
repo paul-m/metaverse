@@ -105,7 +105,7 @@ function _metaverse_autoreg_add_user(&$sl, $args) {
     return $response;
   }
 
-  $mv = s_metaverse_for_shard_name($_SERVER['HTTP_X_SECONDLIFE_SHARD']);
+  $mv = metaverse_for_shard_name($_SERVER['HTTP_X_SECONDLIFE_SHARD']);
   if ($mv == NULL) return;
   if ($mv->grid_restricted) return;
   $drupal_name = $args['website_username'] . ' ' . $mv->grid_nick;;
